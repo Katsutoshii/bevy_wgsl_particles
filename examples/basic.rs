@@ -3,12 +3,25 @@
 
 use std::f32::consts::PI;
 
-use bevy::{color::palettes::css::WHITE, prelude::*};
+use bevy::{
+    pbr::{MaterialPipeline, MaterialPipelineKey},
+    prelude::*,
+    render::{
+        mesh::MeshVertexBufferLayoutRef,
+        render_resource::{
+            AsBindGroup, RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError,
+        },
+    },
+};
 use bevy_wgsl_particles::{MeshBuilder, WgslParticlePlugin};
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, WgslParticlePlugin))
+        .add_plugins((
+            DefaultPlugins,
+            WgslParticlePlugin,
+            MaterialPlugin::<ParticleMaterial>::default(),
+        ))
         .insert_resource(ClearColor(Color::BLACK))
         .add_systems(Startup, setup)
         .run();
@@ -18,7 +31,7 @@ fn main() {
 fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<ParticleMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
     commands.spawn((
@@ -35,9 +48,9 @@ fn setup(
     let size = UVec2::new(4, 4);
     commands.spawn((
         Mesh3d(meshes.add(MeshBuilder::grid(size).build())),
-        MeshMaterial3d(materials.add(StandardMaterial {
-            base_color: Color::Srgba(WHITE),
-            base_color_texture: Some(asset_server.load("textures/bubble_transparent.png")),
+        MeshMaterial3d(materials.add(ParticleMaterial {
+            color: LinearRgba::new(1.0, 1.0, 1.0, 1.0).into(),
+            color_texture: asset_server.load("textures/bubble_transparent.png"),
             alpha_mode: AlphaMode::Blend,
             ..default()
         })),
@@ -46,4 +59,46 @@ fn setup(
             ..default()
         },
     ));
+}
+
+// This is the struct that will be passed to your shader
+#[derive(Asset, TypePath, AsBindGroup, Default, Debug, Clone)]
+struct ParticleMaterial {
+    #[uniform(0)]
+    color: LinearRgba,
+
+    #[texture(1)]
+    #[sampler(2)]
+    color_texture: Handle<Image>,
+
+    alpha_mode: AlphaMode,
+}
+impl ParticleMaterial {
+    const SHADER_ASSET_PATH: &str = "shaders/basic.wgsl";
+}
+
+impl Material for ParticleMaterial {
+    fn vertex_shader() -> ShaderRef {
+        Self::SHADER_ASSET_PATH.into()
+    }
+    fn fragment_shader() -> ShaderRef {
+        Self::SHADER_ASSET_PATH.into()
+    }
+    fn alpha_mode(&self) -> AlphaMode {
+        self.alpha_mode
+    }
+
+    fn specialize(
+        _pipeline: &MaterialPipeline<Self>,
+        descriptor: &mut RenderPipelineDescriptor,
+        layout: &MeshVertexBufferLayoutRef,
+        _key: MaterialPipelineKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        let vertex_layout = layout.0.get_layout(&[
+            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
+            Mesh::ATTRIBUTE_UV_0.at_shader_location(1),
+        ])?;
+        descriptor.vertex.buffers = vec![vertex_layout];
+        Ok(())
+    }
 }

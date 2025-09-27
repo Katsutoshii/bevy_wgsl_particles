@@ -51,7 +51,9 @@ features = [
 
 
 [dev-dependencies]
-bevy = { version = "0.16", default-features = true }
+bevy = { version = "0.16", default-features = true, features = [
+    "file_watcher",
+] }
 
 [[example]]
 name = "basic"

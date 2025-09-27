@@ -36,6 +36,7 @@ impl MeshBuilder {
             Self::index(x, y + 1, w),
         ]
     }
+
     /// Compute a grid mesh of quads according to size.
     pub fn grid(mut size: UVec2) -> Self {
         size = size * 2 - UVec2::ONE;
