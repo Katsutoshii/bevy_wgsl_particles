@@ -27,7 +27,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
     let i = vertex.index / vertices_per_particle;
     let offset = particles[i].position;
-    let position = vertex.position + offset;
+    let position = offset + vec3<f32>(vertex.position.xy, 0.0);
     out.clip_position = mesh_position_local_to_clip(
         get_world_from_local(vertex.instance_index),
         vec4<f32>(position, 1.0),

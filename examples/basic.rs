@@ -62,10 +62,7 @@ fn setup(
             particles: particles.0.clone(),
             ..default()
         })),
-        Transform {
-            scale: Vec3::splat(5.0),
-            ..default()
-        },
+        Transform::default(),
     ));
 }
 
