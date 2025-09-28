@@ -18,6 +18,7 @@ struct Vertex {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
+    @location(1) i: u32,
 };
 
 
@@ -32,11 +33,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
         vec4<f32>(position, 1.0),
     );
     out.uv = vertex.uv;
+    out.i = i;
     return out;
 }
 
 @fragment
 fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
-    let color_mult = vec4<f32>(1.0, 1.0, 1.0, 0.2);
-    return color_mult * color * textureSample(color_texture, color_texture_sampler, input.uv);
+    let i = input.i;
+    return particles[i].color * color * textureSample(color_texture, color_texture_sampler, input.uv);
 }

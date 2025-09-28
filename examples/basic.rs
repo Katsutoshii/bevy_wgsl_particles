@@ -51,11 +51,11 @@ fn setup(
         Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Z),
     ));
     commands.spawn(DirectionalLight::default());
-    let size = UVec2::new(4, 4);
+    let size = UVec2::new(16, 16);
     commands.spawn((
         Mesh3d(meshes.add(MeshBuilder::grid(size).build())),
         MeshMaterial3d(materials.add(ParticleMaterial {
-            color: LinearRgba::new(1.0, 1.0, 1.0, 1.0).into(),
+            color: LinearRgba::new(1.0, 1.0, 1.0, 0.3).into(),
             vertices_per_particle: 4,
             color_texture: asset_server.load("textures/bubble_transparent.png"),
             alpha_mode: AlphaMode::Blend,
@@ -63,7 +63,7 @@ fn setup(
             ..default()
         })),
         Transform {
-            scale: Vec3::splat(10.0),
+            scale: Vec3::splat(5.0),
             ..default()
         },
     ));

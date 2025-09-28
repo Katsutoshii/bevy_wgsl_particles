@@ -311,34 +311,33 @@ impl<S: ComputeShader> ComputeNode<S> {
         pipeline: &ComputePipeline<S>,
         pipeline_cache: &PipelineCache,
     ) -> ComputeNodeStatus {
-        match self.status {
-            ComputeNodeStatus::Init | ComputeNodeStatus::Update => {
-                return ComputeNodeStatus::Update;
+        let init_status =
+            pipeline_cache.get_compute_pipeline_state(pipeline.resources.init_pipeline);
+        match init_status {
+            CachedPipelineState::Creating(_) | CachedPipelineState::Queued => {
+                return ComputeNodeStatus::Loading;
             }
-            ComputeNodeStatus::Error => {
+            CachedPipelineState::Err(_) => {
                 return ComputeNodeStatus::Error;
             }
             _ => {}
         }
-        if self.status == ComputeNodeStatus::Init {
-            return ComputeNodeStatus::Update;
-        }
-        let init_status =
-            pipeline_cache.get_compute_pipeline_state(pipeline.resources.init_pipeline);
-        if let CachedPipelineState::Err(_) = init_status {
-            return ComputeNodeStatus::Error;
-        }
         let update_status =
             pipeline_cache.get_compute_pipeline_state(pipeline.resources.update_pipeline);
-        if let CachedPipelineState::Err(_) = update_status {
-            return ComputeNodeStatus::Error;
+        match update_status {
+            CachedPipelineState::Creating(_) | CachedPipelineState::Queued => {
+                return ComputeNodeStatus::Loading;
+            }
+            CachedPipelineState::Err(_) => {
+                return ComputeNodeStatus::Error;
+            }
+            _ => {}
         }
-        if let (CachedPipelineState::Ok(_), CachedPipelineState::Ok(_)) =
-            (init_status, update_status)
-        {
-            return ComputeNodeStatus::Init;
+        match self.status {
+            ComputeNodeStatus::Loading => ComputeNodeStatus::Init,
+            ComputeNodeStatus::Init | ComputeNodeStatus::Update => ComputeNodeStatus::Update,
+            _ => ComputeNodeStatus::Error,
         }
-        ComputeNodeStatus::Loading
     }
 }
 impl<S: ComputeShader> render_graph::Node for ComputeNode<S> {

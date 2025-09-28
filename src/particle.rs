@@ -3,6 +3,7 @@
 use bevy::{
     app::Plugin,
     asset::{load_internal_asset, weak_handle, DirectAssetAccessExt, Handle},
+    color::LinearRgba,
     ecs::{
         resource::Resource,
         world::{FromWorld, World},
@@ -34,6 +35,7 @@ impl Plugin for ParticlePlugin {
 pub struct Particle {
     pub position: Vec3,
     pub velocity: Vec3,
+    pub color: LinearRgba,
 }
 
 #[derive(Resource, ExtractResource, Clone)]
@@ -41,7 +43,7 @@ pub struct ParticleBuffer(pub Handle<ShaderStorageBuffer>);
 
 impl FromWorld for ParticleBuffer {
     fn from_world(world: &mut World) -> Self {
-        let particles = [Particle::default(); 16];
+        let particles = [Particle::default(); 16 * 16];
         Self(world.add_asset(ShaderStorageBuffer::from(particles)))
     }
 }
