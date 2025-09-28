@@ -7,58 +7,48 @@ use bevy::render::mesh::{Indices, Mesh, PrimitiveTopology};
 pub struct MeshBuilder {
     pub positions: Vec<[f32; 3]>,
     pub uvs: Vec<[f32; 2]>,
-    pub normals: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
 }
 
 impl MeshBuilder {
-    pub fn position_to_uv(p: &[f32; 3]) -> [f32; 2] {
-        [0.5 + p[0], 0.5 - p[1]]
-    }
-
-    pub fn index_to_uv(x: u32, y: u32) -> [f32; 2] {
-        [(x % 2) as f32, (y % 2) as f32]
-    }
-
-    pub fn index(x: u32, y: u32, w: u32) -> u32 {
-        x + y * w
-    }
-
     pub fn quad_indices(x: u32, y: u32, w: u32) -> [u32; 6] {
+        let q = x + y * w;
+        let i = q * 4;
+        [i, i + 1, i + 2, i, i + 2, i + 3]
+    }
+
+    pub fn get_position(x: u32, y: u32, size: UVec2) -> [f32; 3] {
+        (UVec2::new(x, y).as_vec2() / size.as_vec2() - Vec2::splat(0.5))
+            .extend(0.0)
+            .to_array()
+    }
+
+    pub fn quad_positions(x: u32, y: u32, size: UVec2) -> [[f32; 3]; 4] {
         [
-            // Bottom triangle
-            Self::index(x, y, w),
-            Self::index(x + 1, y, w),
-            Self::index(x + 1, y + 1, w),
-            // Top triangle
-            Self::index(x, y, w),
-            Self::index(x + 1, y + 1, w),
-            Self::index(x, y + 1, w),
+            Self::get_position(x, y, size),
+            Self::get_position(x + 1, y, size),
+            Self::get_position(x + 1, y + 1, size),
+            Self::get_position(x, y + 1, size),
         ]
     }
 
+    pub fn quad_uvs() -> [[f32; 2]; 4] {
+        [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+    }
+
     /// Compute a grid mesh of quads according to size.
-    pub fn grid(mut size: UVec2) -> Self {
-        size = size * 2 - UVec2::ONE;
-        let bounds = size - UVec2::ONE;
-        let num_points = size.x as usize * size.y as usize;
-        let num_quads = bounds.x as usize * bounds.y as usize;
+    pub fn grid(size: UVec2) -> Self {
+        let num_quads = size.x as usize * size.y as usize;
         let mut builder = Self {
-            positions: Vec::with_capacity(num_points),
-            uvs: Vec::with_capacity(num_points),
-            normals: Vec::with_capacity(num_points),
+            positions: Vec::with_capacity(num_quads * 4),
+            uvs: Vec::with_capacity(num_quads * 4),
             indices: Vec::with_capacity(num_quads * 6),
         };
         for y in 0..size.y {
             for x in 0..size.x {
-                let xy = UVec2::new(x, y).as_vec2() / bounds.as_vec2() - Vec2::splat(0.5);
-                builder.positions.push(xy.extend(0.0).to_array());
-                builder.uvs.push(Self::index_to_uv(x, y));
-            }
-        }
-        for y in (0..bounds.y).step_by(2) {
-            for x in (0..bounds.x).step_by(2) {
-                builder.indices.extend(Self::quad_indices(x, y, size.x));
+                builder.positions.extend(Self::quad_positions(x, y, size));
+                builder.uvs.extend(Self::quad_uvs());
+                builder.indices.extend(Self::quad_indices(x, y, size.x))
             }
         }
         builder
