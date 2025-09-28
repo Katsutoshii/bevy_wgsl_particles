@@ -33,6 +33,7 @@ impl Plugin for ParticlePlugin {
 #[derive(Default, ShaderType, Copy, Clone, Debug)]
 pub struct Particle {
     pub position: Vec3,
+    pub velocity: Vec3,
 }
 
 #[derive(Resource, ExtractResource, Clone)]

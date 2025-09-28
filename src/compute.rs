@@ -4,15 +4,6 @@ use std::{
     marker::PhantomData,
 };
 
-use bevy::ecs::{
-    schedule::{
-        common_conditions::{not, resource_changed, resource_exists, resource_exists_and_changed},
-        Condition, IntoScheduleConfigs,
-    },
-    system::{Commands, Res, ResMut, StaticSystemParam},
-    world::{FromWorld, World},
-};
-use bevy::math::UVec3;
 use bevy::render::{
     extract_resource::{extract_resource, ExtractResource, ExtractResourcePlugin},
     render_graph::{self, RenderGraph, RenderLabel},
@@ -32,6 +23,20 @@ use bevy::{
     ecs::resource::Resource,
 };
 use bevy::{asset::DirectAssetAccessExt, render::alpha::AlphaMode};
+use bevy::{
+    asset::Handle,
+    ecs::{
+        schedule::{
+            common_conditions::{
+                not, resource_changed, resource_exists, resource_exists_and_changed,
+            },
+            Condition, IntoScheduleConfigs,
+        },
+        system::{Commands, Res, ResMut, StaticSystemParam},
+        world::{FromWorld, World},
+    },
+};
+use bevy::{math::UVec3, render::render_resource::Shader};
 
 /// Plugin to create all the required systems for using a custom compute shader.
 pub struct ComputeShaderPlugin<S: ComputeShader> {
@@ -113,7 +118,11 @@ pub trait ComputeShader: AsBindGroup + Clone + Debug + FromWorld + ExtractResour
         param: StaticSystemParam<<Self as AsBindGroup>::Param>,
     ) {
         let bind_group = input
-            .as_bind_group(&pipeline.layout, &render_device, &mut param.into_inner())
+            .as_bind_group(
+                &pipeline.resources.layout,
+                &render_device,
+                &mut param.into_inner(),
+            )
             .unwrap();
         commands.insert_resource(ComputeShaderBindGroup::<Self> {
             bind_group: bind_group.bind_group,
@@ -134,7 +143,8 @@ pub struct ComputeShaderBindGroup<S: ComputeShader> {
 pub enum ComputeNodeStatus {
     #[default]
     Loading,
-    Ready,
+    Init,
+    Update,
     Error,
 }
 /// Tracks compute node state.
@@ -182,24 +192,27 @@ impl<S: ComputeShader> ComputeNodeState<S> {
     }
 }
 
-/// Defines the pipeline for the compute shader.
-#[derive(Resource)]
-pub struct ComputePipeline<S: ComputeShader> {
+struct ComputePipelineResources {
     pub layout: BindGroupLayout,
-    pipeline: CachedComputePipelineId,
-    _marker: PhantomData<S>,
+    init_pipeline: CachedComputePipelineId,
+    update_pipeline: CachedComputePipelineId,
 }
-impl<S: ComputeShader> FromWorld for ComputePipeline<S> {
-    fn from_world(world: &mut World) -> Self {
-        let render_device = world.resource::<RenderDevice>();
-        let layout = S::bind_group_layout(render_device);
-        let shader = match S::compute_shader() {
-            ShaderRef::Default => panic!("Must define compute_shader."),
-            ShaderRef::Handle(handle) => handle,
-            ShaderRef::Path(path) => world.load_asset(path),
-        };
-        let pipeline_cache = world.resource::<PipelineCache>();
-        let pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
+impl ComputePipelineResources {
+    pub fn new(
+        shader: Handle<Shader>,
+        layout: BindGroupLayout,
+        pipeline_cache: &PipelineCache,
+    ) -> Self {
+        let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
+            label: Some("ComputePipeline".into()),
+            layout: vec![layout.clone()],
+            push_constant_ranges: Vec::new(),
+            shader: shader.clone(),
+            shader_defs: Vec::new(),
+            entry_point: "init".into(),
+            zero_initialize_workgroup_memory: false,
+        });
+        let update_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
             label: Some("ComputePipeline".into()),
             layout: vec![layout.clone()],
             push_constant_ranges: Vec::new(),
@@ -210,7 +223,32 @@ impl<S: ComputeShader> FromWorld for ComputePipeline<S> {
         });
         Self {
             layout,
-            pipeline,
+            init_pipeline,
+            update_pipeline,
+        }
+    }
+}
+
+/// Defines the pipeline for the compute shader.
+#[derive(Resource)]
+pub struct ComputePipeline<S: ComputeShader> {
+    resources: ComputePipelineResources,
+    _marker: PhantomData<S>,
+}
+impl<S: ComputeShader> FromWorld for ComputePipeline<S> {
+    fn from_world(world: &mut World) -> Self {
+        let render_device = world.resource::<RenderDevice>();
+        let shader = match S::compute_shader() {
+            ShaderRef::Default => panic!("Must define compute_shader."),
+            ShaderRef::Handle(handle) => handle,
+            ShaderRef::Path(path) => world.load_asset(path),
+        };
+        Self {
+            resources: ComputePipelineResources::new(
+                shader,
+                S::bind_group_layout(render_device),
+                world.resource::<PipelineCache>(),
+            ),
             _marker: PhantomData,
         }
     }
@@ -267,25 +305,52 @@ impl<S: ComputeShader> ComputeNode<S> {
             ..Default::default()
         };
     }
+    /// Check pipeline load state.
+    fn next_state(
+        &self,
+        pipeline: &ComputePipeline<S>,
+        pipeline_cache: &PipelineCache,
+    ) -> ComputeNodeStatus {
+        match self.status {
+            ComputeNodeStatus::Init | ComputeNodeStatus::Update => {
+                return ComputeNodeStatus::Update;
+            }
+            ComputeNodeStatus::Error => {
+                return ComputeNodeStatus::Error;
+            }
+            _ => {}
+        }
+        if self.status == ComputeNodeStatus::Init {
+            return ComputeNodeStatus::Update;
+        }
+        let init_status =
+            pipeline_cache.get_compute_pipeline_state(pipeline.resources.init_pipeline);
+        if let CachedPipelineState::Err(_) = init_status {
+            return ComputeNodeStatus::Error;
+        }
+        let update_status =
+            pipeline_cache.get_compute_pipeline_state(pipeline.resources.update_pipeline);
+        if let CachedPipelineState::Err(_) = update_status {
+            return ComputeNodeStatus::Error;
+        }
+        if let (CachedPipelineState::Ok(_), CachedPipelineState::Ok(_)) =
+            (init_status, update_status)
+        {
+            return ComputeNodeStatus::Init;
+        }
+        ComputeNodeStatus::Loading
+    }
 }
 impl<S: ComputeShader> render_graph::Node for ComputeNode<S> {
     fn update(&mut self, world: &mut World) {
         let pipeline = world.resource::<ComputePipeline<S>>();
         let pipeline_cache = world.resource::<PipelineCache>();
-
-        let next_status = match pipeline_cache.get_compute_pipeline_state(pipeline.pipeline) {
-            CachedPipelineState::Ok(_) => ComputeNodeStatus::Ready,
-            CachedPipelineState::Creating(_) => ComputeNodeStatus::Loading,
-            CachedPipelineState::Queued => ComputeNodeStatus::Loading,
-            CachedPipelineState::Err(_) => ComputeNodeStatus::Error,
-        };
-
+        let next_status = self.next_state(pipeline, pipeline_cache);
         if self.status != next_status {
             self.status = next_status;
             world.resource_mut::<ComputeNodeState<S>>().status = next_status;
         }
     }
-
     fn run(
         &self,
         _graph: &mut render_graph::RenderGraphContext,
@@ -295,20 +360,40 @@ impl<S: ComputeShader> render_graph::Node for ComputeNode<S> {
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline = world.resource::<ComputePipeline<S>>();
         let bind_group = &world.resource::<ComputeShaderBindGroup<S>>().bind_group;
-        if self.status == ComputeNodeStatus::Ready {
-            if let Some(init_pipeline) = pipeline_cache.get_compute_pipeline(pipeline.pipeline) {
-                let workgroup_size = S::workgroup_size();
-                let mut pass =
-                    render_context
-                        .command_encoder()
-                        .begin_compute_pass(&ComputePassDescriptor {
-                            label: Some("Compute pass"),
+        match self.status {
+            ComputeNodeStatus::Init => {
+                if let Some(init_pipeline) =
+                    pipeline_cache.get_compute_pipeline(pipeline.resources.init_pipeline)
+                {
+                    let workgroup_size = S::workgroup_size();
+                    let mut pass = render_context.command_encoder().begin_compute_pass(
+                        &ComputePassDescriptor {
+                            label: Some("ComputeInit"),
                             ..Default::default()
-                        });
-                pass.set_bind_group(0, bind_group, &[]);
-                pass.set_pipeline(init_pipeline);
-                pass.dispatch_workgroups(workgroup_size.x, workgroup_size.y, workgroup_size.z);
+                        },
+                    );
+                    pass.set_bind_group(0, bind_group, &[]);
+                    pass.set_pipeline(init_pipeline);
+                    pass.dispatch_workgroups(workgroup_size.x, workgroup_size.y, workgroup_size.z);
+                }
             }
+            ComputeNodeStatus::Update => {
+                if let Some(update_pipeline) =
+                    pipeline_cache.get_compute_pipeline(pipeline.resources.update_pipeline)
+                {
+                    let workgroup_size = S::workgroup_size();
+                    let mut pass = render_context.command_encoder().begin_compute_pass(
+                        &ComputePassDescriptor {
+                            label: Some("ComputeUpdate"),
+                            ..Default::default()
+                        },
+                    );
+                    pass.set_bind_group(0, bind_group, &[]);
+                    pass.set_pipeline(update_pipeline);
+                    pass.dispatch_workgroups(workgroup_size.x, workgroup_size.y, workgroup_size.z);
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
