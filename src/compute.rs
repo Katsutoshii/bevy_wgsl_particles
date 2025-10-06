@@ -4,39 +4,41 @@ use std::{
     marker::PhantomData,
 };
 
-use bevy::render::{
-    extract_resource::{extract_resource, ExtractResource, ExtractResourcePlugin},
-    render_graph::{self, RenderGraph, RenderLabel},
-    render_resource::{
-        AsBindGroup, BindGroup, BindGroupLayout, CachedComputePipelineId, CachedPipelineState,
-        ComputePassDescriptor, ComputePipelineDescriptor, PipelineCache, ShaderRef,
-    },
-    renderer::{RenderContext, RenderDevice},
-    ExtractSchedule, MainWorld, Render, RenderApp, RenderSet,
-};
-use bevy::state::{
-    app::AppExtStates,
-    state::{NextState, States},
-};
 use bevy::{
     app::{App, Plugin},
-    ecs::resource::Resource,
+    ecs::{resource::Resource, schedule::SystemCondition},
+    render::{alpha::AlphaMode, RenderSystems},
+    shader::{Shader, ShaderRef},
 };
-use bevy::{asset::DirectAssetAccessExt, render::alpha::AlphaMode};
 use bevy::{
+    asset::DirectAssetAccessExt,
     asset::Handle,
     ecs::{
         schedule::{
             common_conditions::{
                 not, resource_changed, resource_exists, resource_exists_and_changed,
             },
-            Condition, IntoScheduleConfigs,
+            IntoScheduleConfigs,
         },
         system::{Commands, Res, ResMut, StaticSystemParam},
         world::{FromWorld, World},
     },
+    math::UVec3,
+    render::{
+        extract_resource::{extract_resource, ExtractResource, ExtractResourcePlugin},
+        render_graph::{self, RenderGraph, RenderLabel},
+        render_resource::{
+            AsBindGroup, BindGroup, BindGroupLayout, CachedComputePipelineId, CachedPipelineState,
+            ComputePassDescriptor, ComputePipelineDescriptor, PipelineCache,
+        },
+        renderer::{RenderContext, RenderDevice},
+        ExtractSchedule, MainWorld, Render, RenderApp,
+    },
+    state::{
+        app::AppExtStates,
+        state::{NextState, States},
+    },
 };
-use bevy::{math::UVec3, render::render_resource::Shader};
 
 /// Plugin to create all the required systems for using a custom compute shader.
 pub struct ComputeShaderPlugin<S: ComputeShader> {
@@ -76,7 +78,7 @@ impl<S: ComputeShader> Plugin for ComputeShaderPlugin<S> {
             .add_systems(
                 Render,
                 S::prepare_bind_group
-                    .in_set(RenderSet::PrepareBindGroups)
+                    .in_set(RenderSystems::PrepareBindGroups)
                     .run_if(
                         not(resource_exists::<ComputeShaderBindGroup<S>>).or(resource_changed::<S>),
                     ),
@@ -209,7 +211,7 @@ impl ComputePipelineResources {
             push_constant_ranges: Vec::new(),
             shader: shader.clone(),
             shader_defs: Vec::new(),
-            entry_point: "init".into(),
+            entry_point: Some("init".into()),
             zero_initialize_workgroup_memory: false,
         });
         let update_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
@@ -218,7 +220,7 @@ impl ComputePipelineResources {
             push_constant_ranges: Vec::new(),
             shader: shader.clone(),
             shader_defs: Vec::new(),
-            entry_point: "update".into(),
+            entry_point: Some("update".into()),
             zero_initialize_workgroup_memory: false,
         });
         Self {

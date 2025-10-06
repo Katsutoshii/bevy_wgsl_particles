@@ -2,7 +2,7 @@
 
 use bevy::{
     app::Plugin,
-    asset::{load_internal_asset, weak_handle, DirectAssetAccessExt, Handle},
+    asset::{load_internal_asset, uuid_handle, DirectAssetAccessExt, Handle},
     color::LinearRgba,
     ecs::{
         resource::Resource,
@@ -10,14 +10,14 @@ use bevy::{
     },
     math::Vec3,
     render::{
-        extract_resource::ExtractResource,
-        render_resource::{Shader, ShaderType},
+        extract_resource::ExtractResource, render_resource::ShaderType,
         storage::ShaderStorageBuffer,
     },
+    shader::Shader,
 };
 
 pub const PARTICLE_SHADER_HANDLE: Handle<Shader> =
-    weak_handle!("289b61ff-cdfe-449f-bd0d-d72d1ca9615c");
+    uuid_handle!("289b61ff-cdfe-449f-bd0d-d72d1ca9615c");
 
 pub struct ParticlePlugin;
 impl Plugin for ParticlePlugin {

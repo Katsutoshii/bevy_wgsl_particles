@@ -4,16 +4,15 @@
 use std::f32::consts::PI;
 
 use bevy::{
+    mesh::MeshVertexBufferLayoutRef,
     pbr::{MaterialPipeline, MaterialPipelineKey},
     prelude::*,
     render::{
         extract_resource::ExtractResource,
-        mesh::MeshVertexBufferLayoutRef,
-        render_resource::{
-            AsBindGroup, RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError,
-        },
+        render_resource::{AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError},
         storage::ShaderStorageBuffer,
     },
+    shader::ShaderRef,
 };
 use bevy_wgsl_particles::{
     ComputeShader, ComputeShaderPlugin, MeshBuilder, ParticleBuffer, WgslParticlePlugin,
@@ -98,7 +97,7 @@ impl Material for ParticleMaterial {
         self.alpha_mode
     }
     fn specialize(
-        _pipeline: &MaterialPipeline<Self>,
+        _pipeline: &MaterialPipeline,
         descriptor: &mut RenderPipelineDescriptor,
         layout: &MeshVertexBufferLayoutRef,
         _key: MaterialPipelineKey<Self>,

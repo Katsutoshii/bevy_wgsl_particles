@@ -2,11 +2,11 @@
 #import bevy_pbr::{mesh_view_bindings::globals};
 #import bevy_wgsl_particles::particle::Particle;
 
-@group(2) @binding(0) var<uniform> color: vec4<f32>;
-@group(2) @binding(1) var<uniform> vertices_per_particle: u32;
-@group(2) @binding(2) var color_texture: texture_2d<f32>;
-@group(2) @binding(3) var color_texture_sampler: sampler;
-@group(2) @binding(4) var<storage, read> particles: array<Particle>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> color: vec4<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> vertices_per_particle: u32;
+@group(#{MATERIAL_BIND_GROUP}) @binding(2) var color_texture: texture_2d<f32>;
+@group(#{MATERIAL_BIND_GROUP}) @binding(3) var color_texture_sampler: sampler;
+@group(#{MATERIAL_BIND_GROUP}) @binding(4) var<storage, read> particles: array<Particle>;
 
 struct Vertex {
     @builtin(vertex_index) index: u32,

@@ -1,6 +1,8 @@
-use bevy::asset::RenderAssetUsages;
-use bevy::math::UVec2;
-use bevy::render::mesh::{Indices, Mesh, PrimitiveTopology};
+use bevy::{
+    asset::RenderAssetUsages,
+    math::UVec2,
+    mesh::{Indices, Mesh, PrimitiveTopology},
+};
 
 /// Utility struct for building a mesh.
 #[derive(Default)]
