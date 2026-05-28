@@ -1,5 +1,5 @@
-//! Example to demonstrate reading texture data back to CPU from a compute shader.
-//! Press Space to cycle through different inputs to the shader to demonstrate reactivity.
+//! Basic exmple of a particle system.
+//! `cargo run --example basic`
 #![allow(dead_code)]
 use std::f32::consts::PI;
 

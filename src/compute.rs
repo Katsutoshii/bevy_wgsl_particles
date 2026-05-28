@@ -7,7 +7,7 @@ use std::{
 use bevy::{
     app::{App, Plugin},
     ecs::{resource::Resource, schedule::SystemCondition},
-    render::{alpha::AlphaMode, RenderSystems},
+    render::{alpha::AlphaMode, render_resource::BindGroupLayoutDescriptor, RenderSystems},
     shader::{Shader, ShaderRef},
 };
 use bevy::{
@@ -28,7 +28,7 @@ use bevy::{
         extract_resource::{extract_resource, ExtractResource, ExtractResourcePlugin},
         render_graph::{self, RenderGraph, RenderLabel},
         render_resource::{
-            AsBindGroup, BindGroup, BindGroupLayout, CachedComputePipelineId, CachedPipelineState,
+            AsBindGroup, BindGroup, CachedComputePipelineId, CachedPipelineState,
             ComputePassDescriptor, ComputePipelineDescriptor, PipelineCache,
         },
         renderer::{RenderContext, RenderDevice},
@@ -115,6 +115,7 @@ pub trait ComputeShader: AsBindGroup + Clone + Debug + FromWorld + ExtractResour
     fn prepare_bind_group(
         mut commands: Commands,
         pipeline: Res<ComputePipeline<Self>>,
+        pipeline_cache: Res<PipelineCache>,
         render_device: Res<RenderDevice>,
         input: Res<Self>,
         param: StaticSystemParam<<Self as AsBindGroup>::Param>,
@@ -123,6 +124,7 @@ pub trait ComputeShader: AsBindGroup + Clone + Debug + FromWorld + ExtractResour
             .as_bind_group(
                 &pipeline.resources.layout,
                 &render_device,
+                &pipeline_cache,
                 &mut param.into_inner(),
             )
             .unwrap();
@@ -195,14 +197,14 @@ impl<S: ComputeShader> ComputeNodeState<S> {
 }
 
 struct ComputePipelineResources {
-    pub layout: BindGroupLayout,
+    pub layout: BindGroupLayoutDescriptor,
     init_pipeline: CachedComputePipelineId,
     update_pipeline: CachedComputePipelineId,
 }
 impl ComputePipelineResources {
     pub fn new(
         shader: Handle<Shader>,
-        layout: BindGroupLayout,
+        layout: BindGroupLayoutDescriptor,
         pipeline_cache: &PipelineCache,
     ) -> Self {
         let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
@@ -248,7 +250,7 @@ impl<S: ComputeShader> FromWorld for ComputePipeline<S> {
         Self {
             resources: ComputePipelineResources::new(
                 shader,
-                S::bind_group_layout(render_device),
+                S::bind_group_layout_descriptor(render_device),
                 world.resource::<PipelineCache>(),
             ),
             _marker: PhantomData,

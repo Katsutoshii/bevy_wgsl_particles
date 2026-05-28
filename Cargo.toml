@@ -1,6 +1,6 @@
 [package]
 name = "bevy_wgsl_particles"
-version = "0.17.0"
+version = "0.18.0"
 authors = ["Josiah Putman"]
 edition = "2021"
 rust-version = "1.90.0"
@@ -15,23 +15,19 @@ autoexamples = false
 
 
 [dependencies]
-rand = "0.8"
-rand_pcg = "0.3"
-
-[dependencies.bevy]
-version = "0.17"
-default-features = false
-features = [
+bevy = { version = "0.18", default-features = false, features = [
     "bevy_core_pipeline",
     "bevy_render",
     "bevy_asset",
     "bevy_log",
     "x11",
-]
+] }
 
 
+rand = { version = "0.8" }
+rand_pcg = { version = "0.3" }
 [dev-dependencies]
-bevy = { version = "0.17", default-features = true, features = [
+bevy = { version = "0.18", default-features = true, features = [
     "file_watcher",
 ] }
 

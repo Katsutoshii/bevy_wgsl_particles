@@ -21,7 +21,6 @@ struct VertexOutput {
     @location(1) i: u32,
 };
 
-
 @vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     var out: VertexOutput;
