@@ -2,7 +2,7 @@
 
 use bevy::{
     app::Plugin,
-    asset::{load_internal_asset, uuid_handle, DirectAssetAccessExt, Handle},
+    asset::{DirectAssetAccessExt, Handle},
     color::LinearRgba,
     ecs::{
         resource::Resource,
@@ -13,22 +13,14 @@ use bevy::{
         extract_resource::ExtractResource, render_resource::ShaderType,
         storage::ShaderStorageBuffer,
     },
-    shader::Shader,
+    shader::load_shader_library,
 };
-
-pub const PARTICLE_SHADER_HANDLE: Handle<Shader> =
-    uuid_handle!("289b61ff-cdfe-449f-bd0d-d72d1ca9615c");
 
 pub struct ParticlePlugin;
 impl Plugin for ParticlePlugin {
     fn build(&self, app: &mut bevy::app::App) {
+        load_shader_library!(app, "particle.wgsl");
         app.init_resource::<ParticleBuffer>();
-        load_internal_asset!(
-            app,
-            PARTICLE_SHADER_HANDLE,
-            "particle.wgsl",
-            Shader::from_wgsl
-        );
     }
 }
 #[derive(Default, ShaderType, Copy, Clone, Debug)]
