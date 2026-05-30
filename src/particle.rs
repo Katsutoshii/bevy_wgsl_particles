@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use bevy::{
     app::Plugin,
     asset::{DirectAssetAccessExt, Handle},
