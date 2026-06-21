@@ -12,7 +12,7 @@ const effect_seed: u32 = 12345;
 
 
 // Initialize the velocity of each particle.
-@compute @workgroup_size(16)
+@compute @workgroup_size(#{WORKGROUP_SIZE_X})
 fn init(in: ComputeInput) {
     let i = in.id.x;
     seed = pcg_hash(i ^ effect_seed);
@@ -23,7 +23,7 @@ fn init(in: ComputeInput) {
 }
 
 // Update the features of each particle.
-@compute @workgroup_size(16)
+@compute @workgroup_size(#{WORKGROUP_SIZE_X})
 fn update(in: ComputeInput) {
     let i = in.id.x;
 

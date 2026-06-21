@@ -8,7 +8,7 @@ use bevy::{
     app::{App, Plugin},
     ecs::{resource::Resource, schedule::SystemCondition},
     render::{alpha::AlphaMode, render_resource::BindGroupLayoutDescriptor, RenderSystems},
-    shader::{Shader, ShaderRef},
+    shader::{Shader, ShaderDefVal, ShaderRef},
 };
 use bevy::{
     asset::DirectAssetAccessExt,
@@ -107,6 +107,8 @@ pub trait ComputeShader: AsBindGroup + Clone + Debug + FromWorld + ExtractResour
     fn compute_shader() -> ShaderRef;
     /// Workgroup size.
     fn workgroup_size() -> UVec3;
+    /// Workgroup count.
+    fn workgroup_count() -> UVec3;
     /// Alpha mode.
     fn alpha_mode() -> AlphaMode {
         AlphaMode::Blend
@@ -204,15 +206,21 @@ struct ComputePipelineResources {
 impl ComputePipelineResources {
     pub fn new(
         shader: Handle<Shader>,
+        workgroup_size: UVec3,
         layout: BindGroupLayoutDescriptor,
         pipeline_cache: &PipelineCache,
     ) -> Self {
+        let shader_defs = vec![
+            ShaderDefVal::UInt("WORKGROUP_SIZE_X".into(), workgroup_size.x),
+            ShaderDefVal::UInt("WORKGROUP_SIZE_Y".into(), workgroup_size.y),
+            ShaderDefVal::UInt("WORKGROUP_SIZE_Z".into(), workgroup_size.z),
+        ];
         let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
             label: Some("ComputePipeline".into()),
             layout: vec![layout.clone()],
             push_constant_ranges: Vec::new(),
             shader: shader.clone(),
-            shader_defs: Vec::new(),
+            shader_defs: shader_defs.clone(),
             entry_point: Some("init".into()),
             zero_initialize_workgroup_memory: false,
         });
@@ -221,7 +229,7 @@ impl ComputePipelineResources {
             layout: vec![layout.clone()],
             push_constant_ranges: Vec::new(),
             shader: shader.clone(),
-            shader_defs: Vec::new(),
+            shader_defs: shader_defs.clone(),
             entry_point: Some("update".into()),
             zero_initialize_workgroup_memory: false,
         });
@@ -250,6 +258,7 @@ impl<S: ComputeShader> FromWorld for ComputePipeline<S> {
         Self {
             resources: ComputePipelineResources::new(
                 shader,
+                S::workgroup_size(),
                 S::bind_group_layout_descriptor(render_device),
                 world.resource::<PipelineCache>(),
             ),
@@ -368,7 +377,7 @@ impl<S: ComputeShader> render_graph::Node for ComputeNode<S> {
                 if let Some(init_pipeline) =
                     pipeline_cache.get_compute_pipeline(pipeline.resources.init_pipeline)
                 {
-                    let workgroup_size = S::workgroup_size();
+                    let workgroup_count = S::workgroup_count();
                     let mut pass = render_context.command_encoder().begin_compute_pass(
                         &ComputePassDescriptor {
                             label: Some("ComputeInit"),
@@ -377,14 +386,18 @@ impl<S: ComputeShader> render_graph::Node for ComputeNode<S> {
                     );
                     pass.set_bind_group(0, bind_group, &[]);
                     pass.set_pipeline(init_pipeline);
-                    pass.dispatch_workgroups(workgroup_size.x, workgroup_size.y, workgroup_size.z);
+                    pass.dispatch_workgroups(
+                        workgroup_count.x,
+                        workgroup_count.y,
+                        workgroup_count.z,
+                    );
                 }
             }
             ComputeNodeStatus::Update => {
                 if let Some(update_pipeline) =
                     pipeline_cache.get_compute_pipeline(pipeline.resources.update_pipeline)
                 {
-                    let workgroup_size = S::workgroup_size();
+                    let workgroup_count = S::workgroup_count();
                     let mut pass = render_context.command_encoder().begin_compute_pass(
                         &ComputePassDescriptor {
                             label: Some("ComputeUpdate"),
@@ -393,7 +406,11 @@ impl<S: ComputeShader> render_graph::Node for ComputeNode<S> {
                     );
                     pass.set_bind_group(0, bind_group, &[]);
                     pass.set_pipeline(update_pipeline);
-                    pass.dispatch_workgroups(workgroup_size.x, workgroup_size.y, workgroup_size.z);
+                    pass.dispatch_workgroups(
+                        workgroup_count.x,
+                        workgroup_count.y,
+                        workgroup_count.z,
+                    );
                 }
             }
             _ => {}

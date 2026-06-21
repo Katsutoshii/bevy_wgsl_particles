@@ -135,6 +135,13 @@ impl ComputeShader for ParticleCompute {
         Self::SHADER_ASSET_PATH.into()
     }
     fn workgroup_size() -> UVec3 {
-        UVec3::new(16, 1, 1)
+        UVec3::new(64, 1, 1)
+    }
+    fn workgroup_count() -> UVec3 {
+        UVec3::new(
+            ParticleBuffer::MAX_PARTICLES / Self::workgroup_size().x,
+            1,
+            1,
+        )
     }
 }
