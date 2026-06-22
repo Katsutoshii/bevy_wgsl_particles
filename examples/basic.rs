@@ -10,7 +10,7 @@ use bevy::{
     render::{
         extract_resource::ExtractResource,
         render_resource::{AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError},
-        storage::ShaderStorageBuffer,
+        storage::ShaderBuffer,
     },
     shader::ShaderRef,
 };
@@ -79,7 +79,7 @@ struct ParticleMaterial {
     color_texture: Handle<Image>,
 
     #[storage(4, read_only)]
-    particles: Handle<ShaderStorageBuffer>,
+    particles: Handle<ShaderBuffer>,
 
     alpha_mode: AlphaMode,
 }
@@ -115,7 +115,7 @@ impl Material for ParticleMaterial {
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Resource, ExtractResource)]
 struct ParticleCompute {
     #[storage(0, visibility(compute))]
-    particles: Handle<ShaderStorageBuffer>,
+    particles: Handle<ShaderBuffer>,
     #[uniform(1)]
     dt: f32,
 }
@@ -137,7 +137,7 @@ impl ComputeShader for ParticleCompute {
     fn workgroup_size() -> UVec3 {
         UVec3::new(64, 1, 1)
     }
-    fn workgroup_count() -> UVec3 {
+    fn workgroup_count(&self) -> UVec3 {
         UVec3::new(
             ParticleBuffer::MAX_PARTICLES / Self::workgroup_size().x,
             1,

@@ -144,15 +144,18 @@ linker = "rust-lld.exe"
 rustdocflags = ["-Clinker=rust-lld.exe"]
 rustflags = [
     # Nightly
-    # "-Zshare-generics=n", # This needs to be off if you use dynamic linking on Windows.
-    # "-Zthreads=0",
+    "-Zshare-generics=n", # This needs to be off if you use dynamic linking on Windows.
+    "-Zthreads=0",
 ]
 
 # Optional: Uncommenting the following improves compile times, but reduces the amount of debug info to 'line number tables only'.
 # In most cases the gains are negligible, but if you are on macOS and have slow compile times you should see significant gains.
-# [profile.dev]
-# debug = 1
+[profile.dev]
+debug = 1
+
+[profile.dev.package."*"]
+opt-level = 3
 
 # Nightly
-# [unstable]
-# no-embed-metadata = true
+[unstable]
+no-embed-metadata = true

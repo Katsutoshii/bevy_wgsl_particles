@@ -8,8 +8,7 @@ use bevy::{
     },
     math::Vec3,
     render::{
-        extract_resource::ExtractResource, render_resource::ShaderType,
-        storage::ShaderStorageBuffer,
+        extract_resource::ExtractResource, render_resource::ShaderType, storage::ShaderBuffer,
     },
     shader::load_shader_library,
 };
@@ -29,7 +28,7 @@ pub struct Particle {
 }
 
 #[derive(Resource, ExtractResource, Clone)]
-pub struct ParticleBuffer(pub Handle<ShaderStorageBuffer>);
+pub struct ParticleBuffer(pub Handle<ShaderBuffer>);
 impl ParticleBuffer {
     pub const MAX_PARTICLES: u32 = 16 * 16;
 }
@@ -37,6 +36,6 @@ impl ParticleBuffer {
 impl FromWorld for ParticleBuffer {
     fn from_world(world: &mut World) -> Self {
         let particles = [Particle::default(); Self::MAX_PARTICLES as usize];
-        Self(world.add_asset(ShaderStorageBuffer::from(particles)))
+        Self(world.add_asset(ShaderBuffer::from(particles)))
     }
 }
