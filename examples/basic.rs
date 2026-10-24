@@ -4,6 +4,7 @@
 use std::f32::consts::PI;
 
 use bevy::{
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
     mesh::MeshVertexBufferLayoutRef,
     pbr::{MaterialPipeline, MaterialPipelineKey},
     prelude::*,
@@ -17,57 +18,71 @@ use bevy::{
     },
     shader::ShaderRef,
 };
+use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_wgsl_particles::{
-    ComputeShader, ComputeShaderPlugin, MeshBuilder, ParticleBuffer, WgslParticlePlugin,
+    ComputeShader, MeshBuilder, ParticleBuffer, WgslParticlePlugin, WgslParticlesPlugin,
 };
 
 fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
-            WgslParticlePlugin,
-            MaterialPlugin::<ParticleMaterial>::default(),
-            ComputeShaderPlugin::<ParticleCompute>::default(),
+            MeshPickingPlugin,
+            EguiPlugin::default(),
+            WorldInspectorPlugin::new(),
+            WgslParticlesPlugin,
+            WgslParticlePlugin::<ParticleMaterial, ParticleCompute>::default(),
         ))
         .insert_resource(ClearColor(Color::BLACK))
+        .init_resource::<BackgroundPlaneAssets>()
+        .init_resource::<ParticleAssets>()
         .add_systems(Startup, setup)
         .run();
 }
 
 /// Visualize the compute shader output as a sprite.
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ParticleMaterial>>,
-    particles: Res<ParticleBuffer>,
-    asset_server: Res<AssetServer>,
-) {
+fn setup(mut commands: Commands) {
     commands.spawn((
-        Camera3d::default(),
-        Projection::Perspective(PerspectiveProjection {
-            fov: PI / 2.0,
-            near: 0.1,
-            far: 2000.,
-            ..default()
-        }),
+        MainCamera,
         Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Z),
     ));
     commands.spawn(DirectionalLight::default());
-    let size = UVec2::new(16, 16);
+    // commands.spawn((ParticleEffect, Transform::default()));
     commands.spawn((
-        Mesh3d(meshes.add(MeshBuilder::grid(size).build())),
-        MeshMaterial3d(materials.add(ParticleMaterial {
-            uniform: ParticleUniforms {
-                color: LinearRgba::new(1.0, 1.0, 1.0, 0.3).into(),
-                vertices_per_particle: 4,
-            },
-            color_texture: asset_server.load("textures/bubble_transparent.png"),
-            particles: particles.0.clone(),
-            alpha_mode: AlphaMode::Blend,
+        BackgroundPlane,
+        Transform {
+            rotation: Quat::from_rotation_x(PI / 2.0),
             ..default()
-        })),
-        Transform::default(),
+        },
     ));
+}
+
+#[derive(Component, Clone, Debug, Reflect)]
+#[require(
+    Name::new("MainCamera"),
+    Camera3d::default(),
+    Projection::Perspective(PerspectiveProjection {
+        fov: PI / 2.0,
+        near: 0.1,
+        far: 2000.,
+        ..default()
+    }))]
+#[component()]
+struct MainCamera;
+impl MainCamera {}
+
+#[derive(Component, Clone, Debug, Reflect)]
+#[require(Name::new("ParticleEffect"))]
+#[component(on_add=Self::on_add)]
+struct ParticleEffect;
+impl ParticleEffect {
+    fn on_add(mut world: DeferredWorld, context: HookContext) {
+        let assets = world.resource::<ParticleAssets>().clone();
+        world
+            .commands()
+            .entity(context.entity)
+            .insert((MeshMaterial3d(assets.material), Mesh3d(assets.mesh)));
+    }
 }
 
 /// Particle material uniforms.
@@ -120,7 +135,7 @@ impl Material for ParticleMaterial {
     }
 }
 
-// This is the struct that will be passed to your shader
+/// Compute shader inputs.
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Resource, ExtractResource)]
 #[extract_app(RenderApp)]
 struct ParticleCompute {
@@ -153,5 +168,78 @@ impl ComputeShader for ParticleCompute {
             1,
             1,
         )
+    }
+}
+
+#[derive(Resource, Reflect, Clone)]
+struct ParticleAssets {
+    material: Handle<ParticleMaterial>,
+    mesh: Handle<Mesh>,
+}
+impl FromWorld for ParticleAssets {
+    fn from_world(world: &mut World) -> Self {
+        let particles = world.resource::<ParticleBuffer>().0.clone();
+        let size = UVec2::new(16, 16);
+        Self {
+            material: world.add_asset(ParticleMaterial {
+                uniform: ParticleUniforms {
+                    color: LinearRgba::new(1.0, 1.0, 1.0, 0.3).into(),
+                    vertices_per_particle: 4,
+                },
+                color_texture: world.load_asset("textures/bubble_transparent.png"),
+                particles: particles,
+                alpha_mode: AlphaMode::Blend,
+                ..default()
+            }),
+            mesh: world.add_asset(MeshBuilder::grid(size).build()),
+        }
+    }
+}
+
+#[derive(Component, Clone, Debug, Reflect)]
+#[require(Name::new("BackgroundPlane"))]
+#[component(on_add=Self::on_add)]
+struct BackgroundPlane;
+impl BackgroundPlane {
+    fn on_add(mut world: DeferredWorld, context: HookContext) {
+        let assets = world.resource::<BackgroundPlaneAssets>().clone();
+        world
+            .commands()
+            .entity(context.entity)
+            .insert((MeshMaterial3d(assets.material), Mesh3d(assets.mesh)))
+            .observe(Self::on_click);
+    }
+    fn on_click(click: On<PointerClick>, mut commands: Commands) {
+        if click.button != PointerButton::Primary {
+            return;
+        }
+        let Some(hit) = click.hit.position else {
+            return;
+        };
+        commands.spawn((
+            ParticleEffect,
+            Transform {
+                translation: hit + Vec3::Y * 0.5 / 2.0,
+                scale: Vec3::splat(0.2),
+                ..default()
+            },
+        ));
+    }
+}
+#[derive(Resource, Reflect, Clone)]
+struct BackgroundPlaneAssets {
+    material: Handle<StandardMaterial>,
+    mesh: Handle<Mesh>,
+}
+impl FromWorld for BackgroundPlaneAssets {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            material: world.add_asset(StandardMaterial {
+                base_color: Color::linear_rgba(0.1, 0.1, 0.1, 0.3),
+                unlit: true,
+                ..default()
+            }),
+            mesh: world.add_asset(Plane3d::default().mesh().size(10.0, 10.0)),
+        }
     }
 }

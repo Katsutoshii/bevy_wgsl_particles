@@ -30,7 +30,9 @@ rand_pcg = { version = "0.3" }
 bevy = { version = "0.20", default-features = true, features = [
     "file_watcher",
     "dynamic_linking",
+    "picking",
 ] }
+bevy-inspector-egui = { version = '0.38' }
 
 [[example]]
 name = "basic"
