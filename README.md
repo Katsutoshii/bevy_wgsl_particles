@@ -11,38 +11,52 @@
 Create a material for your particle and spawn it.
 
 ```rs
+// Define your own effect via shaders.
+#[derive(Clone, Debug, Reflect)]
+struct BubbleEffect;
+impl Effect for BubbleEffect {
+    fn material_shader() -> ShaderRef {
+        "shaders/basic.wesl".into()
+    }
+    fn compute_shader() -> ShaderRef {
+        "shaders/compute.wesl".into()
+    }
+    fn max_instances() -> usize {
+        16
+    }
+    fn particles_per_instance() -> usize {
+        64
+    }
+}
+
+// Add WgslParticlesPlugin and WgslParticleEffectPlugin
 fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
             WgslParticlesPlugin,
-            WgslParticlePlugin<ParticleMaterial, ParticleCompute>::default()
+            WgslParticleEffectPlugin<BubbleEffect>::default()
         ))
         .add_systems(Startup, setup)
         .run();
 }
 
-fn update(commands: Commands) {
+/// Spawn particles wherever you like.
+fn setup(commands: Commands) {
     commands.spawn(
-        Mesh3d(meshes.add(MeshBuilder::grid(size).build())),
-        MeshMaterial3d(materials.add(ParticleMaterial {
-            uniform: ParticleUniforms {
-                color: LinearRgba::new(1.0, 1.0, 1.0, 0.3).into(),
-                vertices_per_particle: 4,
-            },
-            color_texture: asset_server.load("textures/bubble_transparent.png"),
-            particles: particles.0.clone(),
-            alpha_mode: AlphaMode::Blend,
-            ..default()
-        }))
+        ParticleEffect<BubbleEffect>(),
+        Transform::default(),
     );
 }
 ```
 
-Next, we 
+## How does it work?
 
-```rs
-```
+Each particle effect is one multi-mesh (collection of quads).
+Each particle effect type is managed via one large `ShaderBuffer` that stores all of the state of each particle.
+The index into the array is computed based on the vertex ID, which is global per draw call.
+All particles of the same effect time happen in the same draw call, so the indexing scheme is sound.
+When we spawn a new particle effect, we write all of the new particles to a new empty partition of the shared buffer.
 
 ## TODO
 

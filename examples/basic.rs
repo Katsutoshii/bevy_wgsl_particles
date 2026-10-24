@@ -4,24 +4,13 @@
 use std::f32::consts::PI;
 
 use bevy::{
+    asset::AssetPath,
     ecs::{lifecycle::HookContext, world::DeferredWorld},
-    mesh::MeshVertexBufferLayoutRef,
-    pbr::{MaterialPipeline, MaterialPipelineKey},
     prelude::*,
-    render::{
-        extract_resource::ExtractResource,
-        render_resource::{
-            AsBindGroup, RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError,
-        },
-        storage::ShaderBuffer,
-        RenderApp,
-    },
     shader::ShaderRef,
 };
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
-use bevy_wgsl_particles::{
-    ComputeShader, MeshBuilder, ParticleBuffer, WgslParticlePlugin, WgslParticlesPlugin,
-};
+use bevy_wgsl_particles::{Effect, ParticleEffect, WgslParticleEffectPlugin, WgslParticlesPlugin};
 
 fn main() {
     App::new()
@@ -31,11 +20,10 @@ fn main() {
             EguiPlugin::default(),
             WorldInspectorPlugin::new(),
             WgslParticlesPlugin,
-            WgslParticlePlugin::<ParticleMaterial, ParticleCompute>::default(),
+            WgslParticleEffectPlugin::<BubbleEffect>::default(),
         ))
         .insert_resource(ClearColor(Color::BLACK))
         .init_resource::<BackgroundPlaneAssets>()
-        .init_resource::<ParticleAssets>()
         .add_systems(Startup, setup)
         .run();
 }
@@ -69,130 +57,24 @@ fn setup(mut commands: Commands) {
     }))]
 #[component()]
 struct MainCamera;
-impl MainCamera {}
 
-#[derive(Component, Clone, Debug, Reflect)]
-#[require(Name::new("ParticleEffect"))]
-#[component(on_add=Self::on_add)]
-struct ParticleEffect;
-impl ParticleEffect {
-    fn on_add(mut world: DeferredWorld, context: HookContext) {
-        let assets = world.resource::<ParticleAssets>().clone();
-        world
-            .commands()
-            .entity(context.entity)
-            .insert((MeshMaterial3d(assets.material), Mesh3d(assets.mesh)));
+#[derive(Clone, Debug, Reflect)]
+struct BubbleEffect;
+impl Effect for BubbleEffect {
+    fn material_shader() -> ShaderRef {
+        "shaders/basic.wesl".into()
     }
-}
-
-/// Particle material uniforms.
-#[derive(ShaderType, Default, Debug, Clone)]
-struct ParticleUniforms {
-    color: LinearRgba,
-    vertices_per_particle: u32,
-}
-
-/// Particle material.
-#[derive(Asset, TypePath, AsBindGroup, Default, Debug, Clone, Resource, ExtractResource)]
-#[extract_app(RenderApp)]
-struct ParticleMaterial {
-    #[uniform(0)]
-    uniform: ParticleUniforms,
-
-    #[texture(1)]
-    #[sampler(2)]
-    color_texture: Handle<Image>,
-
-    #[storage(3, read_only)]
-    particles: Handle<ShaderBuffer>,
-    alpha_mode: AlphaMode,
-}
-impl ParticleMaterial {
-    const SHADER_ASSET_PATH: &str = "shaders/basic.wesl";
-}
-impl Material for ParticleMaterial {
-    fn vertex_shader() -> ShaderRef {
-        Self::SHADER_ASSET_PATH.into()
-    }
-    fn fragment_shader() -> ShaderRef {
-        Self::SHADER_ASSET_PATH.into()
-    }
-    fn alpha_mode(&self) -> AlphaMode {
-        self.alpha_mode
-    }
-    fn specialize(
-        _pipeline: &MaterialPipeline,
-        descriptor: &mut RenderPipelineDescriptor,
-        layout: &MeshVertexBufferLayoutRef,
-        _key: MaterialPipelineKey<Self>,
-    ) -> Result<(), SpecializedMeshPipelineError> {
-        let vertex_layout = layout.0.get_layout(&[
-            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
-            Mesh::ATTRIBUTE_UV_0.at_shader_location(1),
-        ])?;
-        descriptor.vertex.buffers = vec![vertex_layout];
-        Ok(())
-    }
-}
-
-/// Compute shader inputs.
-#[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Resource, ExtractResource)]
-#[extract_app(RenderApp)]
-struct ParticleCompute {
-    #[storage(0, visibility(compute))]
-    particles: Handle<ShaderBuffer>,
-    #[uniform(1)]
-    dt: f32,
-}
-impl ParticleCompute {
-    const SHADER_ASSET_PATH: &str = "shaders/compute.wesl";
-}
-impl FromWorld for ParticleCompute {
-    fn from_world(world: &mut World) -> Self {
-        Self {
-            dt: 0.005,
-            particles: world.resource::<ParticleBuffer>().0.clone(),
-        }
-    }
-}
-impl ComputeShader for ParticleCompute {
     fn compute_shader() -> ShaderRef {
-        Self::SHADER_ASSET_PATH.into()
+        "shaders/compute.wesl".into()
     }
-    fn workgroup_size() -> UVec3 {
-        UVec3::new(64, 1, 1)
+    fn max_instances() -> usize {
+        16
     }
-    fn workgroup_count(&self) -> UVec3 {
-        UVec3::new(
-            ParticleBuffer::MAX_PARTICLES / Self::workgroup_size().x,
-            1,
-            1,
-        )
+    fn particles_per_instance() -> usize {
+        64
     }
-}
-
-#[derive(Resource, Reflect, Clone)]
-struct ParticleAssets {
-    material: Handle<ParticleMaterial>,
-    mesh: Handle<Mesh>,
-}
-impl FromWorld for ParticleAssets {
-    fn from_world(world: &mut World) -> Self {
-        let particles = world.resource::<ParticleBuffer>().0.clone();
-        let size = UVec2::new(16, 16);
-        Self {
-            material: world.add_asset(ParticleMaterial {
-                uniform: ParticleUniforms {
-                    color: LinearRgba::new(1.0, 1.0, 1.0, 0.3).into(),
-                    vertices_per_particle: 4,
-                },
-                color_texture: world.load_asset("textures/bubble_transparent.png"),
-                particles: particles,
-                alpha_mode: AlphaMode::Blend,
-                ..default()
-            }),
-            mesh: world.add_asset(MeshBuilder::grid(size).build()),
-        }
+    fn texture_path() -> AssetPath<'static> {
+        AssetPath::from("textures/bubble_transparent.png")
     }
 }
 
@@ -217,7 +99,7 @@ impl BackgroundPlane {
             return;
         };
         commands.spawn((
-            ParticleEffect,
+            ParticleEffect::<BubbleEffect>::default(),
             Transform {
                 translation: hit + Vec3::Y * 0.5 / 2.0,
                 scale: Vec3::splat(0.2),
