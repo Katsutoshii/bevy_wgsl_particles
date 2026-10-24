@@ -1,4 +1,4 @@
-#import bevy_wgsl_particles::particle::{Particle, ComputeInput, particles, frand3, seed, pcg_hash};
+import bevy_wgsl_particles::particle::{Particle, ComputeInput, particles, frand3, seed, pcg_hash};
 
 @group(0) @binding(1) var<uniform> dt: f32;
 
@@ -12,7 +12,7 @@ const effect_seed: u32 = 12345;
 
 
 // Initialize the velocity of each particle.
-@compute @workgroup_size(#{WORKGROUP_SIZE_X})
+@compute @workgroup_size(constants::WORKGROUP_SIZE_X)
 fn init(in: ComputeInput) {
     let i = in.id.x;
     seed = pcg_hash(i ^ effect_seed);
@@ -23,7 +23,7 @@ fn init(in: ComputeInput) {
 }
 
 // Update the features of each particle.
-@compute @workgroup_size(#{WORKGROUP_SIZE_X})
+@compute @workgroup_size(constants::WORKGROUP_SIZE_X)
 fn update(in: ComputeInput) {
     let i = in.id.x;
 

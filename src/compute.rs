@@ -9,8 +9,11 @@ use bevy::{
     ecs::{component::Mutable, resource::Resource, schedule::SystemCondition},
     material::AlphaMode,
     render::{
+        material_bind_groups::FallbackBuffer,
+        render_asset::RenderAssets,
         render_resource::BindGroupLayoutDescriptor,
         renderer::{RenderGraph, RenderGraphSystems},
+        storage::GpuShaderBuffer,
         RenderSystems,
     },
     shader::{Shader, ShaderDefVal, ShaderRef},
@@ -74,7 +77,7 @@ impl<S: ComputeShader> Plugin for ComputeShaderPlugin<S> {
                 ExtractSchedule,
                 ComputeNode::<S>::reset_on_change
                     .run_if(resource_exists_and_changed::<S>)
-                    .after(extract_resource::<S, _>),
+                    .after(extract_resource::<S, RenderApp, _>),
             )
             .add_systems(
                 ExtractSchedule,
@@ -101,7 +104,12 @@ impl<S: ComputeShader> Plugin for ComputeShaderPlugin<S> {
 
 /// Trait to implement for a custom compute shader.
 pub trait ComputeShader:
-    AsBindGroup + Clone + Debug + FromWorld + ExtractResource + Resource<Mutability = Mutable>
+    AsBindGroup
+    + Clone
+    + Debug
+    + FromWorld
+    + ExtractResource<RenderApp>
+    + Resource<Mutability = Mutable>
 {
     /// Get a unique name for this class.
     fn unique_name() -> &'static str {
@@ -123,6 +131,8 @@ pub trait ComputeShader:
         pipeline: Res<ComputePipeline<Self>>,
         pipeline_cache: Res<PipelineCache>,
         render_device: Res<RenderDevice>,
+        fallback_buffer: Res<FallbackBuffer>,
+        render_assets: Res<RenderAssets<GpuShaderBuffer>>,
         input: Res<Self>,
         param: StaticSystemParam<<Self as AsBindGroup>::Param>,
     ) {
@@ -131,6 +141,8 @@ pub trait ComputeShader:
                 &pipeline.resources.layout,
                 &render_device,
                 &pipeline_cache,
+                &fallback_buffer,
+                &render_assets,
                 &mut param.into_inner(),
             )
             .unwrap();

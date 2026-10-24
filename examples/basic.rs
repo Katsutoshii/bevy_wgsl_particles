@@ -9,8 +9,11 @@ use bevy::{
     prelude::*,
     render::{
         extract_resource::ExtractResource,
-        render_resource::{AsBindGroup, RenderPipelineDescriptor, SpecializedMeshPipelineError},
+        render_resource::{
+            AsBindGroup, RenderPipelineDescriptor, ShaderType, SpecializedMeshPipelineError,
+        },
         storage::ShaderBuffer,
+        RenderApp,
     },
     shader::ShaderRef,
 };
@@ -54,37 +57,43 @@ fn setup(
     commands.spawn((
         Mesh3d(meshes.add(MeshBuilder::grid(size).build())),
         MeshMaterial3d(materials.add(ParticleMaterial {
-            color: LinearRgba::new(1.0, 1.0, 1.0, 0.3).into(),
-            vertices_per_particle: 4,
+            uniform: ParticleUniforms {
+                color: LinearRgba::new(1.0, 1.0, 1.0, 0.3).into(),
+                vertices_per_particle: 4,
+            },
             color_texture: asset_server.load("textures/bubble_transparent.png"),
-            alpha_mode: AlphaMode::Blend,
             particles: particles.0.clone(),
+            alpha_mode: AlphaMode::Blend,
             ..default()
         })),
         Transform::default(),
     ));
 }
 
-// This is the struct that will be passed to your shader
+/// Particle material uniforms.
+#[derive(ShaderType, Default, Debug, Clone)]
+struct ParticleUniforms {
+    color: LinearRgba,
+    vertices_per_particle: u32,
+}
+
+/// Particle material.
 #[derive(Asset, TypePath, AsBindGroup, Default, Debug, Clone, Resource, ExtractResource)]
+#[extract_app(RenderApp)]
 struct ParticleMaterial {
     #[uniform(0)]
-    color: LinearRgba,
+    uniform: ParticleUniforms,
 
-    #[uniform(1)]
-    vertices_per_particle: u32,
-
-    #[texture(2)]
-    #[sampler(3)]
+    #[texture(1)]
+    #[sampler(2)]
     color_texture: Handle<Image>,
 
-    #[storage(4, read_only)]
+    #[storage(3, read_only)]
     particles: Handle<ShaderBuffer>,
-
     alpha_mode: AlphaMode,
 }
 impl ParticleMaterial {
-    const SHADER_ASSET_PATH: &str = "shaders/basic.wgsl";
+    const SHADER_ASSET_PATH: &str = "shaders/basic.wesl";
 }
 impl Material for ParticleMaterial {
     fn vertex_shader() -> ShaderRef {
@@ -113,6 +122,7 @@ impl Material for ParticleMaterial {
 
 // This is the struct that will be passed to your shader
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone, Resource, ExtractResource)]
+#[extract_app(RenderApp)]
 struct ParticleCompute {
     #[storage(0, visibility(compute))]
     particles: Handle<ShaderBuffer>,
@@ -120,7 +130,7 @@ struct ParticleCompute {
     dt: f32,
 }
 impl ParticleCompute {
-    const SHADER_ASSET_PATH: &str = "shaders/compute.wgsl";
+    const SHADER_ASSET_PATH: &str = "shaders/compute.wesl";
 }
 impl FromWorld for ParticleCompute {
     fn from_world(world: &mut World) -> Self {

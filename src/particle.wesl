@@ -1,21 +1,19 @@
-#define_import_path bevy_wgsl_particles::particle
-
-
-@group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
+@group(0) @binding(0)
+var<storage, read_write> particles: array<Particle>;
 
 struct Particle {
     position: vec3<f32>,
     velocity: vec3<f32>,
-    color: vec4<f32>
-};
+    color: vec4<f32>,
+}
 
 struct ComputeInput {
     @builtin(global_invocation_id) id: vec3<u32>,
-};
+}
 
 const tau: f32 = 6.283185307179586476925286766559;
 
-var<private> seed : u32 = 0u;
+var<private> seed: u32 = 0u;
 
 // Rand: PCG
 // https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
@@ -66,9 +64,9 @@ fn frand4() -> vec4<f32> {
     var r2 = pcg_hash(r1);
     seed = r2;
     var x = to_float01(r0);
-    var r01 = (r0 & 0xff000000u) >> 8u | (r1 & 0x0000ffffu);
+    var r01 = ((r0 & 0xff000000u) >> 8u) | (r1 & 0x0000ffffu);
     var y = to_float01(r01);
-    var r12 = (r1 & 0xffff0000u) >> 8u | (r2 & 0x000000ffu);
+    var r12 = ((r1 & 0xffff0000u) >> 8u) | (r2 & 0x000000ffu);
     var z = to_float01(r12);
     var r22 = r2 >> 8u;
     var w = to_float01(r22);
