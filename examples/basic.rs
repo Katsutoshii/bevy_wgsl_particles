@@ -10,7 +10,9 @@ use bevy::{
     shader::ShaderRef,
 };
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
-use bevy_wgsl_particles::{Effect, ParticleEffect, WgslParticleEffectPlugin, WgslParticlesPlugin};
+use bevy_wgsl_particles::{
+    Effect, ParticleEffect, ParticleSpawner, WgslParticleEffectPlugin, WgslParticlesPlugin,
+};
 
 fn main() {
     App::new()
@@ -35,7 +37,10 @@ fn setup(mut commands: Commands) {
         Transform::from_xyz(0.0, 0.0, 10.0).looking_at(Vec3::ZERO, Vec3::Z),
     ));
     commands.spawn(DirectionalLight::default());
-    // commands.spawn((ParticleEffect, Transform::default()));
+    commands.spawn((
+        ParticleEffect::<BubbleEffect>::default(),
+        Transform::default(),
+    ));
     commands.spawn((
         BackgroundPlane,
         Transform {
@@ -99,7 +104,7 @@ impl BackgroundPlane {
             return;
         };
         commands.spawn((
-            ParticleEffect::<BubbleEffect>::default(),
+            ParticleSpawner::<BubbleEffect>::default(),
             Transform {
                 translation: hit + Vec3::Y * 0.5 / 2.0,
                 scale: Vec3::splat(0.2),

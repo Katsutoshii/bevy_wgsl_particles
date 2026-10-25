@@ -165,7 +165,6 @@ pub struct ComputeShaderBindGroup<S: ComputeShader> {
 pub enum ComputeNodeStatus {
     #[default]
     Loading,
-    Init,
     Update,
     Error,
 }
@@ -216,7 +215,6 @@ impl<S: ComputeShader> ComputeNodeState<S> {
 
 struct ComputePipelineResources<S: ComputeShader> {
     pub layout: BindGroupLayoutDescriptor,
-    init_pipeline: CachedComputePipelineId,
     update_pipeline: CachedComputePipelineId,
     _marker: PhantomData<S>,
 }
@@ -232,15 +230,6 @@ impl<S: ComputeShader> ComputePipelineResources<S> {
             ShaderDefVal::UInt("WORKGROUP_SIZE_Y".into(), workgroup_size.y),
             ShaderDefVal::UInt("WORKGROUP_SIZE_Z".into(), workgroup_size.z),
         ];
-        let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
-            label: Some(S::unique_name().into()),
-            layout: vec![layout.clone()],
-            shader: shader.clone(),
-            shader_defs: shader_defs.clone(),
-            entry_point: Some("init".into()),
-            zero_initialize_workgroup_memory: true,
-            ..default()
-        });
         let update_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
             label: Some(S::unique_name().into()),
             layout: vec![layout.clone()],
@@ -252,7 +241,6 @@ impl<S: ComputeShader> ComputePipelineResources<S> {
         });
         Self {
             layout,
-            init_pipeline,
             update_pipeline,
             _marker: PhantomData,
         }
@@ -313,17 +301,6 @@ impl<S: ComputeShader> ComputeNode<S> {
         pipeline: &ComputePipeline<S>,
         pipeline_cache: &PipelineCache,
     ) -> ComputeNodeStatus {
-        let init_status =
-            pipeline_cache.get_compute_pipeline_state(pipeline.resources.init_pipeline);
-        match init_status {
-            CachedPipelineState::Creating(_) | CachedPipelineState::Queued => {
-                return ComputeNodeStatus::Loading;
-            }
-            CachedPipelineState::Err(_) => {
-                return ComputeNodeStatus::Error;
-            }
-            _ => {}
-        }
         let update_status =
             pipeline_cache.get_compute_pipeline_state(pipeline.resources.update_pipeline);
         match update_status {
@@ -336,8 +313,8 @@ impl<S: ComputeShader> ComputeNode<S> {
             _ => {}
         }
         match self.status {
-            ComputeNodeStatus::Loading => ComputeNodeStatus::Init,
-            ComputeNodeStatus::Init | ComputeNodeStatus::Update => ComputeNodeStatus::Update,
+            ComputeNodeStatus::Loading => ComputeNodeStatus::Update,
+            ComputeNodeStatus::Update => ComputeNodeStatus::Update,
             _ => ComputeNodeStatus::Error,
         }
     }
@@ -366,26 +343,6 @@ impl<S: ComputeShader> ComputeNode<S> {
         mut ctx: RenderContext,
     ) {
         match node.status {
-            ComputeNodeStatus::Init => {
-                if let Some(init_pipeline) =
-                    pipeline_cache.get_compute_pipeline(pipeline.resources.init_pipeline)
-                {
-                    let workgroup_count = shader.workgroup_count();
-                    let mut pass =
-                        ctx.command_encoder()
-                            .begin_compute_pass(&ComputePassDescriptor {
-                                label: Some(S::unique_name()),
-                                ..Default::default()
-                            });
-                    pass.set_bind_group(0, &bind_group.bind_group, &[]);
-                    pass.set_pipeline(init_pipeline);
-                    pass.dispatch_workgroups(
-                        workgroup_count.x,
-                        workgroup_count.y,
-                        workgroup_count.z,
-                    );
-                }
-            }
             ComputeNodeStatus::Update => {
                 if let Some(update_pipeline) =
                     pipeline_cache.get_compute_pipeline(pipeline.resources.update_pipeline)

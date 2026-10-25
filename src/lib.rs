@@ -3,8 +3,7 @@ use std::marker::PhantomData;
 
 use bevy::{
     app::{App, Plugin},
-    asset::{Asset, AssetPath, DirectAssetAccessExt, Handle},
-    color::LinearRgba,
+    asset::{Asset, AssetPath, Handle},
     ecs::{
         component::Component,
         lifecycle::HookContext,
@@ -12,31 +11,33 @@ use bevy::{
         resource::Resource,
         world::{DeferredWorld, FromWorld, World},
     },
-    image::Image,
-    material::{
-        descriptor::RenderPipelineDescriptor, specialize::SpecializedMeshPipelineError, AlphaMode,
-    },
-    math::{UVec2, UVec3},
-    mesh::{Mesh, Mesh3d, MeshVertexBufferLayoutRef},
-    pbr::{Material, MaterialPipeline, MaterialPipelineKey, MaterialPlugin, MeshMaterial3d},
+    material::AlphaMode,
+    math::UVec3,
+    mesh::Mesh3d,
+    pbr::{MaterialPlugin, MeshMaterial3d},
     reflect::{Reflect, TypePath},
     render::{
-        extract_resource::ExtractResource,
-        render_resource::{AsBindGroup, ShaderType},
-        storage::ShaderBuffer,
+        extract_resource::ExtractResource, render_resource::AsBindGroup, storage::ShaderBuffer,
         RenderApp,
     },
     shader::ShaderRef,
 };
 
+mod assets;
 mod compute;
+mod material;
 mod mesh;
 mod particle;
+mod spawner;
 
+use crate::spawner::ParticleSpawnerPlugin;
 pub use crate::{
+    assets::ParticleAssets,
     compute::{ComputeShader, ComputeShaderPlugin},
+    material::ParticleMaterial,
     mesh::MeshBuilder,
     particle::Particle,
+    spawner::ParticleSpawner,
 };
 
 pub struct WgslParticlesPlugin;
@@ -51,9 +52,10 @@ pub struct WgslParticleEffectPlugin<E: Effect> {
 }
 impl<E: Effect> Plugin for WgslParticleEffectPlugin<E> {
     fn build(&self, app: &mut App) {
-        app.add_plugins(MaterialPlugin::<ParticleMaterial<E>>::default())
+        app.add_plugins(MaterialPlugin::<material::ParticleMaterial<E>>::default())
             .init_resource::<ParticleAssets<E>>()
-            .add_plugins(ComputeShaderPlugin::<ParticleCompute<E>>::default());
+            .add_plugins(ComputeShaderPlugin::<ParticleCompute<E>>::default())
+            .add_plugins(ParticleSpawnerPlugin::<E>::default());
     }
 }
 impl<E: Effect> Default for WgslParticleEffectPlugin<E> {
@@ -106,84 +108,6 @@ impl<E: Effect> ParticleEffect<E> {
             .commands()
             .entity(context.entity)
             .insert((MeshMaterial3d(assets.material), Mesh3d(assets.mesh)));
-    }
-}
-
-/// Particle material uniforms.
-#[derive(ShaderType, Default, Debug, Clone)]
-struct ParticleUniforms {
-    color: LinearRgba,
-    vertices_per_particle: u32,
-}
-
-/// Particle material.
-#[derive(Asset, TypePath, AsBindGroup, Default, Debug, Clone, Resource, ExtractResource)]
-#[extract_app(RenderApp)]
-struct ParticleMaterial<E: Effect> {
-    #[uniform(0)]
-    uniform: ParticleUniforms,
-
-    #[texture(1)]
-    #[sampler(2)]
-    color_texture: Handle<Image>,
-
-    #[storage(3, read_only)]
-    particles: Handle<ShaderBuffer>,
-    alpha_mode: AlphaMode,
-    _marker: PhantomData<E>,
-}
-
-#[derive(Resource, Reflect, Clone)]
-pub struct ParticleAssets<E: Effect> {
-    buffer: Handle<ShaderBuffer>,
-    material: Handle<ParticleMaterial<E>>,
-    mesh: Handle<Mesh>,
-}
-impl<E: Effect> FromWorld for ParticleAssets<E> {
-    fn from_world(world: &mut World) -> Self {
-        let particles: Vec<Particle> =
-            vec![Particle::default(); E::particles_per_instance() * E::max_instances() as usize];
-        let buffer = world.add_asset(ShaderBuffer::from(particles));
-        let size = UVec2::new(16, 16);
-        Self {
-            buffer: buffer.clone(),
-            material: world.add_asset(ParticleMaterial {
-                uniform: ParticleUniforms {
-                    color: LinearRgba::new(1.0, 1.0, 1.0, 0.3).into(),
-                    vertices_per_particle: 4,
-                },
-                color_texture: world.load_asset(E::texture_path()),
-                particles: buffer,
-                alpha_mode: AlphaMode::Blend,
-                _marker: PhantomData,
-            }),
-            mesh: world.add_asset(MeshBuilder::grid(size).build()),
-        }
-    }
-}
-
-impl<E: Effect> Material for ParticleMaterial<E> {
-    fn vertex_shader() -> ShaderRef {
-        E::material_shader()
-    }
-    fn fragment_shader() -> ShaderRef {
-        E::material_shader()
-    }
-    fn alpha_mode(&self) -> AlphaMode {
-        self.alpha_mode
-    }
-    fn specialize(
-        _pipeline: &MaterialPipeline,
-        descriptor: &mut RenderPipelineDescriptor,
-        layout: &MeshVertexBufferLayoutRef,
-        _key: MaterialPipelineKey<Self>,
-    ) -> Result<(), SpecializedMeshPipelineError> {
-        let vertex_layout = layout.0.get_layout(&[
-            Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
-            Mesh::ATTRIBUTE_UV_0.at_shader_location(1),
-        ])?;
-        descriptor.vertex.buffers = vec![vertex_layout];
-        Ok(())
     }
 }
 
